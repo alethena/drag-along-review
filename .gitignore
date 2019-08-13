@@ -1,0 +1,9 @@
+secret.json
+build
+node_modules/
+build/
+contracts/.vscode
+contracts/bin/
+bin/
+coverage/
+coverage.json

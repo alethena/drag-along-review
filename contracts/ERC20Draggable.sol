@@ -1,0 +1,305 @@
+/**
+ * Copyright (c) 2019 Equility AG (alethena.com)
+ *
+ * MIT License with Automated License Fee Payments
+ *
+ * Permission is hereby granted to any person obtaining a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * - The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ * - All automated license fee payments integrated into this and related Software are preserved.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+ * FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+pragma solidity ^0.5.10;
+
+import "./IERC20.sol";
+import "./SafeMath.sol";
+import "./ERC20.sol";
+import "./Acquisition.sol";
+import "./IMigratable.sol";
+
+/**
+ * @title Alethena SHA
+ * @author Benjamin Rickenbacher, benjamin@alethena.com
+ * @author Luzius Meisser, luzius@meissereconomics.com
+ * @dev These tokens are based on the ERC20 standard and the open-zeppelin library.
+ *
+ * This is an ERC-20 token representing shares of ServiceHunter AG that are bound to
+ * a shareholder agreement that can be found at [LINK TO TERMS]. The agreement is partially
+ * enforced through the Swiss legal system, and partially enforced through this smart
+ * contract. In particular, this smart contract implements a drag-along clause which allows
+ * the majority of token holders to force the minority sell their shares along with them
+ * in case of an acquisition. That's why the tokens are called "Draggable ServiceHunter AG Shares."
+ */
+
+
+contract ERC20Draggable is ERC20 {
+
+    using SafeMath for uint256;
+
+    IERC20 private wrapped;                        // The wrapped contract
+
+    // If the wrapped tokens got replaced in an acquisition, unwrapping might yield many currency tokens
+    uint256 public unwrapConversionFactor = 1;
+
+    // The current acquisition attempt, if any. See initiateAcquisition to see the requirements to make a public offer.
+    Acquisition public offer;
+    IERC20 private currency;                       // Crypto Franc contract, the currency used in acquisitions
+    address public offerFeeRecipient;              // Recipient of the fee. Fee makes sure the offer is serious.
+
+    uint256 public offerFee;             // Fee of 5000 XCHF
+    uint256 public migrationQuorum;      // Number of tokens that need to be migrated to complete migration
+    uint256 public acquisitionQuorum;
+
+    uint256 public minOfferImprovement = 10500; // New offer must be at least 105% of old offer
+    uint256 public minHolding = 500;           // Need at least 5% of all drag along tokens to ake an offer
+    uint256 public minDragAlongQuote = 3000;   // 30% of the equity needs to be represented by drag along tokens for an offer to be made
+
+    bool public active = true;                    // True as long as this contract is legally binding and the wrapped tokens are locked.
+
+    event OfferCreated(address indexed buyer, uint256 pricePerShare);
+    event OfferEnded(address indexed buyer, address sender, bool success, string message);
+    event MigrationSucceeded(address newContractAddress);
+
+    constructor(
+        address wrappedToken,
+        uint256 migrationQuorumInBIPS_,
+        uint256 acquisitionQuorum_,
+        address currencyAddress,
+        address offerFeeRecipient_,
+        uint offerFee_
+    ) public {
+        wrapped = IERC20(wrappedToken);
+        offerFeeRecipient = offerFeeRecipient_;
+        offerFee = offerFee_;
+        migrationQuorum = migrationQuorumInBIPS_;
+        acquisitionQuorum = acquisitionQuorum_;
+        currency = IERC20(currencyAddress);
+        IShares(wrappedToken).totalShares();
+    }
+
+    function getWrappedContract() public view returns (address) {
+        return address(wrapped);
+    }
+
+    function getCurrencyContract() public view returns (address) {
+        return address(currency);
+    }
+
+    function updateCurrency(address newCurrency) public noOfferPending () {
+        require(active, "Contract is not active");
+        require(IMigratable(getCurrencyContract()).migrationToContract() == newCurrency, "Invalid currency update");
+        currency = IERC20(newCurrency);
+    }
+
+    /** Increases the number of ABV tokens. Requires minter to deposit an equal amount of share tokens */
+    function wrap(address shareholder, uint256 amount) public noOfferPending() {
+        require(active, "Contract not active any more.");
+        require(wrapped.balanceOf(msg.sender) >= amount, "Share balance not sufficient.");
+        require(wrapped.allowance(msg.sender, address(this)) >= amount, "Share allowance not sufficient.");
+        require(wrapped.transferFrom(msg.sender, address(this), amount), "Share transfer failed.");
+        _mint(shareholder, amount);
+    }
+
+    /** Decrease the number of ABV tokens. The user gets back their shares in return */
+    function unwrap(uint256 amount) public {
+        require(!active, "As long as the contract is active, you are bound to it.");
+        _burn(msg.sender, amount);
+        require(wrapped.transfer(msg.sender, amount.mul(unwrapConversionFactor)), "Share transfer failed");
+    }
+
+    /**
+     * Burns both the token itself as well as the wrapped token!
+     * If you want to get out of the shareholder agreement, use unwrap after it has been
+     * deactivated by a majority vote or acquisition.
+     *
+     * Burning only works if wrapped token supports burning. Also, the exact meaning of this
+     * operation might depend on the circumstances. Burning and reussing the wrapped token
+     * does not free the sender from the legal obligations of the shareholder agreement.
+     */
+    function burn(uint256 amount) public {
+        _burn(msg.sender, amount);
+        IBurnable(getWrappedContract()).burn(amount.mul(unwrapConversionFactor));
+    }
+
+  /** @dev Function to start drag-along procedure
+   *  This can be called by anyone, but there is an upfront payment.
+   */
+    function initiateAcquisition(uint256 pricePerShare) public {
+        require(active, "An accepted offer exists");
+        uint256 totalEquity = IShares(getWrappedContract()).totalShares();
+        address buyer = msg.sender;
+
+        require(totalSupply() >= totalEquity.mul(minDragAlongQuote).div(10000), "This contract does not represent enough equity.");
+        require(balanceOf(buyer) >= totalEquity.mul(minHolding).div(10000), "You need to hold at least 5% of the firm to make an offer.");
+
+        currency.transferFrom(buyer, offerFeeRecipient, offerFee);
+
+        Acquisition newOffer = new Acquisition(msg.sender, pricePerShare, acquisitionQuorum);
+        require(newOffer.isWellFunded(getCurrencyContract(), totalSupply() - balanceOf(buyer)), "Insufficient funding.");
+        if (offerExists()) {
+            require(pricePerShare >= offer.price() * 105 / 100, "New offers must be at least 5% higher than the pending offer.");
+            killAcquisition("Offer was replaced by a higher bid");
+        }
+        offer = newOffer;
+
+        emit OfferCreated(buyer, pricePerShare);
+    }
+
+    function voteYes() public offerPending() {
+        address voter = msg.sender;
+        offer.voteYes(voter, balanceOf(voter));
+    }
+
+    function voteNo() public offerPending() {
+        address voter = msg.sender;
+        offer.voteNo(voter, balanceOf(voter));
+    }
+
+    function cancelAcquisition() public offerPending() {
+        require(msg.sender == offer.buyer(), "You are not authorized to cancel this acquisition offer");
+        killAcquisition("Cancelled by buyer");
+    }
+
+    function contestAcquisition() public offerPending() {
+        if (offer.hasExpired()) {
+            killAcquisition("Offer expired");
+        } else if (offer.quorumHasFailed()) {
+            killAcquisition("Not enough support.");
+        } else if (
+            !offer.isWellFunded(
+                getCurrencyContract(),
+                totalSupply().sub(balanceOf(offer.buyer()))
+                )
+            ) {
+            killAcquisition("Offer was not sufficiently funded.");
+        } else {
+            revert("Acquisition contest unsuccessful");
+        }
+    }
+
+    function killAcquisition(string memory message) internal {
+        address buyer = offer.buyer();
+        offer.kill();
+        offer = Acquisition(address(0));
+        emit OfferEnded(
+            buyer,
+            msg.sender,
+            false,
+            message
+        );
+    }
+
+    function completeAcquisition() public offerPending() {
+        address buyer = offer.buyer();
+        require(msg.sender == buyer, "You are not authorized to complete this acquisition offer.");
+        require(offer.isQuorumReached(), "Insufficient number of yes votes.");
+        require(
+            offer.isWellFunded(
+            getCurrencyContract(),
+            totalSupply().sub(balanceOf(buyer))),
+            "Offer insufficiently funded"
+            );
+        invertHoldings(buyer, currency, offer.price());
+        emit OfferEnded(
+            buyer,
+            msg.sender,
+            true,
+            "Completed successfully"
+        );
+    }
+
+    function wasAcquired() public view returns (bool) {
+        return offerExists() ? !active : false;
+    }
+
+    function invertHoldings(address newOwner, IERC20 newBacking, uint256 conversionRate) internal {
+        uint256 buyerBalance = balanceOf(newOwner);
+        uint256 initialSupply = totalSupply();
+        active = false;
+        unwrap(buyerBalance);
+        uint256 remaining = initialSupply.sub(buyerBalance);
+        require(totalSupply() == remaining, "Remaining token number incorrect");
+        wrapped.transfer(newOwner, remaining);
+        newBacking.transferFrom(newOwner, address(this), conversionRate.mul(remaining));
+        wrapped = newBacking;
+        unwrapConversionFactor = conversionRate;
+        require(newBacking.balanceOf(address(this)) >= totalSupply().mul(unwrapConversionFactor), "Insufficient Backing");
+    }
+
+    function migrate() public {
+        require(active, "Contract is not active");
+        address successor = msg.sender;
+        require(balanceOf(successor) >= totalSupply().mul(migrationQuorum).div(10000), "Quorum not reached.");
+
+        if (offerExists()) {
+            if (!offer.quorumHasFailed()) {
+                voteNo(); // should shut down the offer
+                require(offer.quorumHasFailed(), "Quorum has not failed");
+            }
+            contestAcquisition();
+            assert (!offerExists());
+        }
+
+        invertHoldings(successor, IERC20(successor), 1);
+        emit MigrationSucceeded(successor);
+    }
+
+    function _mint(address account, uint256 amount) internal {
+        super._mint(account, amount);
+        if (offerExists() && active) {
+            // never executed in the default implementation as wrap requires no offer
+            offer.adjustVotes(address(0), account, amount);
+        }
+    }
+
+    function _transfer(address from, address to, uint256 value) internal {
+        super._transfer(from, to, value);
+        if (offerExists() && active) {
+            offer.adjustVotes(from, to, value);
+        }
+    }
+
+    function _burn(address account, uint256 amount) internal {
+        require(balanceOf(msg.sender) >= amount, "Balance insufficient");
+        super._burn(account, amount);
+        if (offerExists() && active) {
+            offer.adjustVotes(account, address(0), amount);
+        }
+    }
+
+    function getPendingOffer() public view returns (address) {
+        return address(offer);
+    }
+
+    function offerExists() public view returns (bool) {
+        return getPendingOffer() != address(0);
+    }
+
+    modifier offerPending() {
+        require(offerExists() && active, "There is no pending offer");
+        _;
+    }
+
+    modifier noOfferPending() {
+        require(!offerExists(), "There is a pending offer");
+        _;
+    }
+
+}
+
+
+contract IShares {
+    function totalShares() public returns (uint256);
+}
+
+
+contract IBurnable {
+    function burn(uint256) public;
+}
