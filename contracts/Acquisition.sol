@@ -1,8 +1,7 @@
-pragma solidity ^0.5.10;
+pragma solidity 0.5.10;
 
 import "./SafeMath.sol";
 import "./IERC20.sol";
-import "./SafeMath.sol";
 
 /**
  * @title Acquisition Attempt
@@ -16,8 +15,8 @@ contract Acquisition {
 
     using SafeMath for uint256;
 
-    uint256 public constant votingPeriod = 60 * 60 * 24 * 30 * 2;    // 2months/60days
-    uint256 public constant validityPeriod = 60 * 60 * 24 * 30 * 3;  // 3months/90days
+    uint256 public constant VOTING_PERIOD = 60 days;    // 2months/60days
+    uint256 public constant VALIDITY_PERIOD = 90 days;  // 3months/90days
 
     uint256 public quorum;                                // Percentage of votes needed to start drag-along process
 
@@ -26,10 +25,13 @@ contract Acquisition {
     uint256 public price;                  // the price offered per share (in XCHF base units, so 10**18 is 1 XCHF)
     uint256 public timestamp;                      // the timestamp of the block in which the acquisition was created
 
-    uint256 public noVotes;                        // number of tokens voting for no
+    uint256 public noVotes;                        // number of tokens voting for no
     uint256 public yesVotes;                       // number of tokens voting for yes
 
-    mapping (address => int8) private votes;               // +1 means yes, -1 means no
+    enum Vote { NONE, YES, NO } // Used internally, represents not voted yet or yes/no vote.
+    mapping (address => Vote) private votes;               // +1 means yes, -1 means no
+
+    event VotesChanged(uint256 newYesVotes, uint256 newNoVotes);
 
     constructor (address payable buyer_, uint256 price_, uint256 quorum_) public {
         require(price_ > 0, "Price cannot be zero");
@@ -74,33 +76,36 @@ contract Acquisition {
 
     function adjustVotes(address from, address to, uint256 value) public parentOnly() {
         if (isVotingOpen()) {
-            int fromVoting = votes[from];
-            int toVoting = votes[to];
+            Vote fromVoting = votes[from];
+            Vote toVoting = votes[to];
             update(fromVoting, toVoting, value);
         }
     }
 
-    function update(int previousVote, int newVote, uint256 votes_) internal {
-        if (previousVote == -1) {
-            noVotes = noVotes.sub(votes_);
-        } else if (previousVote == 1) {
-            yesVotes = yesVotes.sub(votes_);
-        }
-        if (newVote == -1) {
-            noVotes = noVotes.add(votes_);
-        } else if (newVote == 1) {
-            yesVotes = yesVotes.add(votes_);
+    function update(Vote previousVote, Vote newVote, uint256 votes_) internal {
+        if (previousVote != newVote) {
+            if (previousVote == Vote.NO) {
+                noVotes = noVotes.sub(votes_);
+            } else if (previousVote == Vote.YES) {
+                yesVotes = yesVotes.sub(votes_);
+            }
+            if (newVote == Vote.NO) {
+                noVotes = noVotes.add(votes_);
+            } else if (newVote == Vote.YES) {
+                yesVotes = yesVotes.add(votes_);
+            }
+            emit VotesChanged(yesVotes, noVotes);
         }
     }
 
     function isVotingOpen() public view returns (bool) {
         uint256 age = block.timestamp.sub(timestamp);
-        return age <= votingPeriod;
+        return age <= VOTING_PERIOD;
     }
 
     function hasExpired() public view returns (bool) {
         uint256 age = block.timestamp.sub(timestamp);
-        return age > validityPeriod;
+        return age > VALIDITY_PERIOD;
     }
 
     modifier votingOpen() {
@@ -109,26 +114,26 @@ contract Acquisition {
     }
 
     function voteYes(address sender, uint256 votes_) public parentOnly() votingOpen() {
-        vote(1, votes_, sender);
+        vote(Vote.YES, votes_, sender);
     }
 
     function voteNo(address sender, uint256 votes_) public parentOnly() votingOpen() {
-        vote(-1, votes_, sender);
+        vote(Vote.NO, votes_, sender);
     }
 
-    function vote(int8 yesOrNo, uint256 votes_, address voter) internal {
-        int8 previousVote = votes[voter];
-        int8 newVote = yesOrNo;
+    function vote(Vote yesOrNo, uint256 votes_, address voter) internal {
+        Vote previousVote = votes[voter];
+        Vote newVote = yesOrNo;
         votes[voter] = newVote;
         update(previousVote, newVote, votes_);
     }
 
     function hasVotedYes(address voter) public view returns (bool) {
-        return votes[voter] == 1;
+        return votes[voter] == Vote.YES;
     }
 
     function hasVotedNo(address voter) public view returns (bool) {
-        return votes[voter] == -1;
+        return votes[voter] == Vote.NO;
     }
 
     function kill() public parentOnly() {

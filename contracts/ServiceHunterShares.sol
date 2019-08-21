@@ -16,7 +16,7 @@
  * FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-pragma solidity ^0.5.10;
+pragma solidity 0.5.10;
 
 import "./SafeMath.sol";
 import "./ERC20Claimable.sol";
@@ -67,6 +67,8 @@ contract ServiceHunterShares is ERC20Claimable, Pausable {
     event Announcement(string message);
     event TokensDeclaredInvalid(address holder, uint256 amount, string message);
     event ShareNumberingEvent(address holder, uint256 firstInclusive, uint256 lastInclusive);
+    event SubRegisterAdded(address contractAddress);
+    event SubRegisterRemoved(address contractAddress);
 
     /**
      * Declares the number of total shares, including those that have not been tokenized and those
@@ -90,6 +92,7 @@ contract ServiceHunterShares is ERC20Claimable, Pausable {
      */
     function recognizeSubRegister(address contractAddress) public onlyOwner () {
         subregisters.push(contractAddress);
+        emit SubRegisterAdded(contractAddress);
     }
 
     function removeSubRegister(address contractAddress) public onlyOwner() {
@@ -97,6 +100,7 @@ contract ServiceHunterShares is ERC20Claimable, Pausable {
             if (subregisters[i] == contractAddress) {
                 subregisters[i] = subregisters[subregisters.length - 1];
                 subregisters.pop();
+                emit SubRegisterRemoved(contractAddress);
             }
         }
     }
@@ -117,7 +121,7 @@ contract ServiceHunterShares is ERC20Claimable, Pausable {
     /**
      * Allows the issuer to make public announcements that are visible on the blockchain.
      */
-    function announcement(string memory message) public onlyOwner() {
+    function announcement(string calldata message) external onlyOwner() {
         emit Announcement(message);
     }
 
@@ -129,6 +133,12 @@ contract ServiceHunterShares is ERC20Claimable, Pausable {
      * The collateral address must be an ERC20 token. Also, do not forget to multiply
      * the rate in accordance with the number of decimals of the collateral.
      * For example, rate should be 7*10**18 for 7 units of a collateral with 18 decimals.
+     *
+     * Care needs to be taken when chosing the custom collateral.
+     * In particular we assume that the token satifies either:
+     * 1) Token transfers return true if and only if the transfer succeeded
+     * OR 
+     * 2) Token transfers throw an exception if the transfer fails
      */
     function setCustomClaimCollateral(address collateral, uint256 rate) public onlyOwner() {
         super._setCustomClaimCollateral(collateral, rate);
@@ -143,7 +153,9 @@ contract ServiceHunterShares is ERC20Claimable, Pausable {
      * with article 973g of the planned adjustments to the Swiss Code of Obligations) and got detached from
      * the underlying shares. Invalid tokens do not carry any shareholder rights any more.
      */
-    function declareInvalid(address holder, uint256 amount, string memory message) public onlyOwner() {
+    function declareInvalid(address holder, uint256 amount, string calldata message) external onlyOwner() {
+        uint256 holderBalance = balanceOf(holder);
+        require(amount <= holderBalance, "Cannot invalidate more tokens than held by address");
         invalidTokens = invalidTokens.add(amount);
         emit TokensDeclaredInvalid(holder, amount, message);
     }
@@ -175,7 +187,7 @@ contract ServiceHunterShares is ERC20Claimable, Pausable {
      * recognized subregisters be taken into account.
      */
     function mintNumbered(address shareholder, uint256 firstShareNumber, uint256 lastShareNumber) public onlyOwner() {
-        mint(shareholder, lastShareNumber - firstShareNumber + 1);
+        mint(shareholder, lastShareNumber.sub(firstShareNumber).add(1));
         emit ShareNumberingEvent(shareholder, firstShareNumber, lastShareNumber);
     }
 

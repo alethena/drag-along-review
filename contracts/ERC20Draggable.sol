@@ -16,7 +16,7 @@
  * FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-pragma solidity ^0.5.10;
+pragma solidity 0.5.10;
 
 import "./IERC20.sol";
 import "./SafeMath.sol";
@@ -50,16 +50,18 @@ contract ERC20Draggable is ERC20 {
 
     // The current acquisition attempt, if any. See initiateAcquisition to see the requirements to make a public offer.
     Acquisition public offer;
-    IERC20 private currency;                       // Crypto Franc contract, the currency used in acquisitions
+
+    IERC20 private currency;    
+
     address public offerFeeRecipient;              // Recipient of the fee. Fee makes sure the offer is serious.
 
     uint256 public offerFee;             // Fee of 5000 XCHF
-    uint256 public migrationQuorum;      // Number of tokens that need to be migrated to complete migration
+    uint256 public migrationQuorum;      // Number of tokens that need to be migrated to complete migration
     uint256 public acquisitionQuorum;
 
-    uint256 public minOfferImprovement = 10500; // New offer must be at least 105% of old offer
-    uint256 public minHolding = 500;           // Need at least 5% of all drag along tokens to ake an offer
-    uint256 public minDragAlongQuote = 3000;   // 30% of the equity needs to be represented by drag along tokens for an offer to be made
+    uint256 constant MIN_OFFER_IMPROVEMENT = 10500; // New offer must be at least 105% of old offer
+    uint256 constant MIN_HOLDING = 500;           // Need at least 5% of all drag along tokens to ake an offer
+    uint256 constant MIN_DRAG_ALONG_QUOTE = 3000;   // 30% of the equity needs to be represented by drag along tokens for an offer to be made
 
     bool public active = true;                    // True as long as this contract is legally binding and the wrapped tokens are locked.
 
@@ -136,15 +138,15 @@ contract ERC20Draggable is ERC20 {
         uint256 totalEquity = IShares(getWrappedContract()).totalShares();
         address buyer = msg.sender;
 
-        require(totalSupply() >= totalEquity.mul(minDragAlongQuote).div(10000), "This contract does not represent enough equity.");
-        require(balanceOf(buyer) >= totalEquity.mul(minHolding).div(10000), "You need to hold at least 5% of the firm to make an offer.");
+        require(totalSupply() >= totalEquity.mul(MIN_DRAG_ALONG_QUOTE).div(10000), "This contract does not represent enough equity.");
+        require(balanceOf(buyer) >= totalEquity.mul(MIN_HOLDING).div(10000), "You need to hold at least 5% of the firm to make an offer.");
 
-        currency.transferFrom(buyer, offerFeeRecipient, offerFee);
+        require(currency.transferFrom(buyer, offerFeeRecipient, offerFee), "Currency transfer failed");
 
         Acquisition newOffer = new Acquisition(msg.sender, pricePerShare, acquisitionQuorum);
         require(newOffer.isWellFunded(getCurrencyContract(), totalSupply() - balanceOf(buyer)), "Insufficient funding.");
         if (offerExists()) {
-            require(pricePerShare >= offer.price() * 105 / 100, "New offers must be at least 5% higher than the pending offer.");
+            require(pricePerShare >= offer.price().mul(MIN_OFFER_IMPROVEMENT).div(10000), "New offers must be at least 5% higher than the pending offer.");
             killAcquisition("Offer was replaced by a higher bid");
         }
         offer = newOffer;
@@ -225,12 +227,10 @@ contract ERC20Draggable is ERC20 {
         active = false;
         unwrap(buyerBalance);
         uint256 remaining = initialSupply.sub(buyerBalance);
-        require(totalSupply() == remaining, "Remaining token number incorrect");
         wrapped.transfer(newOwner, remaining);
         newBacking.transferFrom(newOwner, address(this), conversionRate.mul(remaining));
         wrapped = newBacking;
         unwrapConversionFactor = conversionRate;
-        require(newBacking.balanceOf(address(this)) >= totalSupply().mul(unwrapConversionFactor), "Insufficient Backing");
     }
 
     function migrate() public {

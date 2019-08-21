@@ -16,7 +16,7 @@
  * FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-pragma solidity ^0.5.10;
+pragma solidity 0.5.10;
 
 import "./ERC20Claimable.sol";
 import "./ERC20Draggable.sol";
@@ -56,6 +56,15 @@ contract DraggableServiceHunterShares is ERC20Claimable, ERC20Draggable {
     uint256 public constant UPDATE_QUORUM = 7500;    // 7500 basis points = 75%
     uint256 public constant ACQUISITION_QUORUM = 7500; // 7500 basis points = 75%
     uint256 public constant OFFER_FEE = 5000 * 10 ** 18; // 5000 XCHF
+
+    /**
+     * In the constructor we specify the currency used. In our case this is the Crypto Franc (XCHF).
+     * Care needs to be taken if another currency is used.
+     * In particular we assume that the currency satifies either:
+     * 1) Token transfer return true if and only if the transfer succeeded
+     * OR 
+     * 2) Token transfers throw an exception if the transfer fails
+     */
 
     constructor(address wrappedToken, address xchfAddress, address offerFeeRecipient)
         ERC20Draggable(wrappedToken, UPDATE_QUORUM, ACQUISITION_QUORUM, xchfAddress, offerFeeRecipient, OFFER_FEE) public {
