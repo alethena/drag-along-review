@@ -52,20 +52,15 @@ contract DraggableServiceHunterShares is ERC20Claimable, ERC20Draggable {
     string public constant name = "Draggable ServiceHunter AG Shares";
     string public constant terms = "quitt.ch/ir";
 
-    uint8 public constant decimals = 0;              // legally, shares are not divisible
-    uint256 public constant UPDATE_QUORUM = 7500;    // 7500 basis points = 75%
-    uint256 public constant ACQUISITION_QUORUM = 7500; // 7500 basis points = 75%
+    uint8 public constant decimals = 0;                  // shares are not divisible
+
+    uint256 public constant UPDATE_QUORUM = 7500;        // 7500 basis points = 75%
+    uint256 public constant ACQUISITION_QUORUM = 7500;   // 7500 basis points = 75%
     uint256 public constant OFFER_FEE = 5000 * 10 ** 18; // 5000 XCHF
 
     /**
-     * In the constructor we specify the currency used. In our case this is the Crypto Franc (XCHF).
-     * Care needs to be taken if another currency is used.
-     * In particular we assume that the currency satifies either:
-     * 1) Token transfer return true if and only if the transfer succeeded
-     * OR 
-     * 2) Token transfers throw an exception if the transfer fails
+     * Designed to be used with the Crypto Franc as currency token. See also parent constructor.
      */
-
     constructor(address wrappedToken, address xchfAddress, address offerFeeRecipient)
         ERC20Draggable(wrappedToken, UPDATE_QUORUM, ACQUISITION_QUORUM, xchfAddress, offerFeeRecipient, OFFER_FEE) public {
         IClaimable(wrappedToken).setClaimable(false);

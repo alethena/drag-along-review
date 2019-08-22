@@ -18,18 +18,18 @@ contract Acquisition {
     uint256 public constant VOTING_PERIOD = 60 days;    // 2months/60days
     uint256 public constant VALIDITY_PERIOD = 90 days;  // 3months/90days
 
-    uint256 public quorum;                                // Percentage of votes needed to start drag-along process
+    uint256 public quorum;                              // Percentage of votes needed to start drag-along process
 
-    address private parent;                         // the parent contract
-    address payable public buyer;                          // the person who made the offer
-    uint256 public price;                  // the price offered per share (in XCHF base units, so 10**18 is 1 XCHF)
-    uint256 public timestamp;                      // the timestamp of the block in which the acquisition was created
+    address private parent;                             // the parent contract
+    address payable public buyer;                       // the person who made the offer
+    uint256 public price;                               // the price offered per share (in XCHF base units, so 10**18 is 1 XCHF)
+    uint256 public timestamp;                           // the timestamp of the block in which the acquisition was created
 
-    uint256 public noVotes;                        // number of tokens voting for no
-    uint256 public yesVotes;                       // number of tokens voting for yes
+    uint256 public noVotes;                             // number of tokens voting for no
+    uint256 public yesVotes;                            // number of tokens voting for yes
 
-    enum Vote { NONE, YES, NO } // Used internally, represents not voted yet or yes/no vote.
-    mapping (address => Vote) private votes;               // +1 means yes, -1 means no
+    enum Vote { NONE, YES, NO }                         // Used internally, represents not voted yet or yes/no vote.
+    mapping (address => Vote) private votes;            // Who votes what
 
     event VotesChanged(uint256 newYesVotes, uint256 newNoVotes);
 
@@ -49,10 +49,6 @@ contract Acquisition {
         uint256 xchfNeeded = sharesToAcquire.mul(price);
         return xchfNeeded <= buyerXCHFBalance && xchfNeeded <= buyerXCHFAllowance;
     }
-
-    // function canStillGetEnoughVotes() public view returns (bool) {
-    //     return !quorumHasFailed();
-    // }
 
     function isQuorumReached() public view returns (bool) {
         if (isVotingOpen()) {

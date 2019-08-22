@@ -49,7 +49,7 @@ contract ERC20Claimable is ERC20 {
         address claimant; // the person who created the claim
         uint256 collateral; // the amount of collateral deposited
         uint32 timestamp;  // the timestamp of the block in which the claim was made
-        address currencyUsed; // The currency (XCHF) can be updated, we record the currency used for every requests
+        address currencyUsed; // The currency (XCHF) can be updated, we record the currency used for every request
     }
 
     // Every claim must be preceded by an obscured preclaim in order to prevent front-running
@@ -66,7 +66,7 @@ contract ERC20Claimable is ERC20 {
     mapping(address => PreClaim) public preClaims; // there can be at most one preclaim per address, here address is claimer
     mapping(address => bool) public claimingDisabled; // disable claimability (e.g. for long term storage)
 
-    // Currency that can be used as collateral or 0x0 if disabled
+    // ERC-20 token that can be used as collateral or 0x0 if disabled
     address public customCollateralAddress;
     uint256 public customCollateralRate;
 
@@ -90,8 +90,9 @@ contract ERC20Claimable is ERC20 {
 
     /**
      * Allows subclasses to set a custom collateral besides the token itself.
-     * The collateral address must be an ERC20 token. Also, do not forget to multiply
-     * the rate in accordance with the number of decimals of the collateral.
+     * The collateral must be an ERC-20 token that returns true on successful transfers and
+     * throws an exception or returns false on failure.
+     * Also, do not forget to multiply the rate in accordance with the number of decimals of the collateral.
      * For example, rate should be 7*10**18 for 7 units of a collateral with 18 decimals.
      */
     function _setCustomClaimCollateral(address collateral, uint256 rate) internal {

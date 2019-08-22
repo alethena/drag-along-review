@@ -52,12 +52,11 @@ contract ServiceHunterShares is ERC20Claimable, Pausable {
 
     using SafeMath for uint256;
 
-    string public constant name = "ServiceHunter AG Shares";
     string public constant symbol = "SHS";
-    uint8 public constant decimals = 0; // legally, shares are not divisible
+    string public constant name = "ServiceHunter AG Shares";
+    string public constant terms = "quitt.ch/ir";
 
-      /** URL where the source code as well as the terms and conditions can be found. */
-    string public constant termsAndConditions = "quitt.ch/ir";
+    uint8 public constant decimals = 0; // legally, shares are not divisible
 
     uint256 public totalShares = 17000;       // total number of shares, maybe not all tokenized
     uint256 public invalidTokens = 0;
@@ -130,15 +129,7 @@ contract ServiceHunterShares is ERC20Claimable, Pausable {
     }
 
     /**
-     * The collateral address must be an ERC20 token. Also, do not forget to multiply
-     * the rate in accordance with the number of decimals of the collateral.
-     * For example, rate should be 7*10**18 for 7 units of a collateral with 18 decimals.
-     *
-     * Care needs to be taken when chosing the custom collateral.
-     * In particular we assume that the token satifies either:
-     * 1) Token transfers return true if and only if the transfer succeeded
-     * OR 
-     * 2) Token transfers throw an exception if the transfer fails
+     * See parent method for collateral requirements.
      */
     function setCustomClaimCollateral(address collateral, uint256 rate) public onlyOwner() {
         super._setCustomClaimCollateral(collateral, rate);

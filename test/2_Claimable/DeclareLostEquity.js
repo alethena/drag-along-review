@@ -264,7 +264,7 @@ contract('Claimable - Claim Lost - Equity', accounts => {
       EQUITYInstance.declareLost(XCHFInstance.address, Shareholder2, nonce, {
         from: Shareholder1
       }),
-      'Preclaim period violated'
+      'Preclaim period end. Claimed too late.'
     );
   });
 
