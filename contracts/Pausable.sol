@@ -1,4 +1,4 @@
-pragma solidity ^0.5.10;
+pragma solidity 0.5.10;
 
 import "./Ownable.sol";
 
@@ -13,7 +13,7 @@ contract Pausable is Ownable {
      * "wrong" forked contracts should be paused in their respective fork. Deciding which
      * fork is the "right" one is up to the owner of the contract.
      */
-    function pause(bool _pause, string memory _message, address _newAddress, uint256 _fromBlock) public onlyOwner() {
+    function pause(bool _pause, string calldata _message, address _newAddress, uint256 _fromBlock) external onlyOwner() {
         paused = _pause;
         emit Pause(_pause, _message, _newAddress, _fromBlock);
     }

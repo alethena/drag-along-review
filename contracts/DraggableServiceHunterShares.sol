@@ -16,7 +16,7 @@
  * FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-pragma solidity ^0.5.10;
+pragma solidity 0.5.10;
 
 import "./ERC20Claimable.sol";
 import "./ERC20Draggable.sol";
@@ -52,11 +52,15 @@ contract DraggableServiceHunterShares is ERC20Claimable, ERC20Draggable {
     string public constant name = "Draggable ServiceHunter AG Shares";
     string public constant terms = "quitt.ch/ir";
 
-    uint8 public constant decimals = 0;              // legally, shares are not divisible
-    uint256 public constant UPDATE_QUORUM = 7500;    // 7500 basis points = 75%
-    uint256 public constant ACQUISITION_QUORUM = 7500; // 7500 basis points = 75%
+    uint8 public constant decimals = 0;                  // shares are not divisible
+
+    uint256 public constant UPDATE_QUORUM = 7500;        // 7500 basis points = 75%
+    uint256 public constant ACQUISITION_QUORUM = 7500;   // 7500 basis points = 75%
     uint256 public constant OFFER_FEE = 5000 * 10 ** 18; // 5000 XCHF
 
+    /**
+     * Designed to be used with the Crypto Franc as currency token. See also parent constructor.
+     */
     constructor(address wrappedToken, address xchfAddress, address offerFeeRecipient)
         ERC20Draggable(wrappedToken, UPDATE_QUORUM, ACQUISITION_QUORUM, xchfAddress, offerFeeRecipient, OFFER_FEE) public {
         IClaimable(wrappedToken).setClaimable(false);

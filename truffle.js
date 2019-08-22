@@ -11,7 +11,8 @@ module.exports = {
           enabled: true,
           runs: 200
         }
-      }
+      },
+       evmVersion: 'petersburg',
     }
   },
   networks: {
@@ -19,7 +20,7 @@ module.exports = {
       host: 'localhost',
       port: 9545,
       network_id: '*', // Match any network id
-      gas: 0x5e29d18
+      gas: 0x7a1200 // 
     },
     coverage: {
       host: 'localhost',
