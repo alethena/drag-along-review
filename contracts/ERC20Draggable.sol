@@ -235,6 +235,7 @@ contract ERC20Draggable is ERC20 {
         uint256 remaining = initialSupply.sub(buyerBalance);
         require(wrapped.transfer(newOwner, remaining), "Wrapped token transfer failed");
         require(newBacking.transferFrom(newOwner, address(this), conversionRate.mul(remaining)), "Backing transfer failed");
+
         wrapped = newBacking;
         unwrapConversionFactor = conversionRate;
     }
