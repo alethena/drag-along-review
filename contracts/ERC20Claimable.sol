@@ -246,7 +246,7 @@ contract ERC20Claimable is ERC20 {
     * After the claim period has passed, the claimant can call this function to send the
     * tokens on the lost address as well as the collateral to himself.
     */
-    function resolveClaim(address lostAddress) public returns (uint256) {
+    function resolveClaim(address lostAddress) public {
         Claim memory claim = claims[lostAddress];
         uint256 collateral = claim.collateral;
         IERC20 currency = IERC20(claim.currencyUsed);
